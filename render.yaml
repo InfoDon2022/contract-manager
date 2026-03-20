@@ -43,6 +43,6 @@ services:
 databases:
   # ── PostgreSQL ──
   - name: contract-manager-db
-    plan: starter
+    plan: basic-256mb
     databaseName: contract_manager
     postgresMajorVersion: "16"
