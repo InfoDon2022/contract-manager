@@ -6,9 +6,10 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models.models import (
     Contract, ClientInvoice, ClientPayment, VendorBill, VendorPayment,
-    DirectCost, MonthlyForecast, BankAccount, Vendor,
+    DirectCost, MonthlyForecast, BankAccount, Vendor, WeeklyEntry,
 )
 from app.schemas import DashboardOut
+from app.routers.weekly_entries import _compute_summary
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -149,3 +150,33 @@ def get_dashboard(db: Session = Depends(get_db)):
         action_items=actions,
         monthly_pl=monthly_pl,
     )
+
+
+@router.get("/monthly-chart")
+def monthly_chart(contract_id: str | None = None, db: Session = Depends(get_db)):
+    """
+    Returns per-month income vs expenses data for the dashboard chart.
+    income = monthly billable from weekly entries (ops + owner margin)
+    expenses = monthly ops cost (subcontractor + direct costs from entries)
+    owner_profit = income - expenses (i.e. just the owner margin)
+    """
+    if not contract_id:
+        c = db.query(Contract).first()
+        if not c:
+            return []
+        contract_id = c.id
+
+    weeks, total_ops, owner_draw = _compute_summary(contract_id, db)
+
+    month_map: dict[str, dict] = {}
+    for w in weeks:
+        month = w["week_start"][:7]
+        if month not in month_map:
+            month_map[month] = {"month": month, "income": 0.0, "expenses": 0.0, "owner_profit": 0.0}
+        month_map[month]["income"] = round(month_map[month]["income"] + w["billable"], 2)
+        month_map[month]["expenses"] = round(month_map[month]["expenses"] + w["ops_cost"], 2)
+
+    for m in month_map.values():
+        m["owner_profit"] = round(m["income"] - m["expenses"], 2)
+
+    return sorted(month_map.values(), key=lambda x: x["month"])

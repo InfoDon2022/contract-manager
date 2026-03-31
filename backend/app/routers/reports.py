@@ -5,8 +5,9 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models.models import (
     ClientInvoice, ClientPayment, VendorBill, VendorPayment,
-    DirectCost, Vendor, MonthlyForecast,
+    DirectCost, Vendor, MonthlyForecast, Contract,
 )
+from app.routers.weekly_entries import _compute_summary
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -70,6 +71,62 @@ def billed_vs_collected(db: Session = Depends(get_db)):
     outstanding = billed - collected
     pct = float(collected / billed * 100) if billed > 0 else 0
     return {"billed": float(billed), "collected": float(collected), "outstanding": float(outstanding), "collection_rate": pct}
+
+
+@router.get("/generate-invoice")
+def generate_invoice(contract_id: str, month_year: str, db: Session = Depends(get_db)):
+    """
+    Generates a monthly invoice to the State of Vermont.
+    Billable = ops_cost + proportional owner margin, converted to hours at $145/hr.
+    Broken down by task code.
+    """
+    BILLING_RATE = Decimal("145")
+    weeks, total_ops, owner_draw = _compute_summary(contract_id, db)
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+
+    # Collect only weeks whose week_start falls in month_year
+    month_weeks = [w for w in weeks if w["week_start"][:7] == month_year]
+
+    task_billable: dict[str, float] = {}
+    monthly_ops = 0.0
+    monthly_billable = 0.0
+
+    for w in month_weeks:
+        monthly_ops += w["ops_cost"]
+        monthly_billable += w["billable"]
+        week_ops = w["ops_cost"]
+        for entry in w["entries"]:
+            tc = entry["task_code"]
+            entry_cost = entry["line_cost"]
+            if week_ops > 0:
+                entry_billable = (entry_cost / week_ops) * w["billable"]
+            else:
+                entry_billable = 0.0
+            task_billable[tc] = round(task_billable.get(tc, 0.0) + entry_billable, 2)
+
+    lines = []
+    for tc in sorted(task_billable.keys()):
+        amount = task_billable[tc]
+        hours = round(amount / float(BILLING_RATE), 2)
+        lines.append({
+            "task_code": tc,
+            "billable_amount": amount,
+            "hours_equivalent": hours,
+        })
+
+    total_hours = round(monthly_billable / float(BILLING_RATE), 2)
+    return {
+        "contract_id": contract_id,
+        "contract_name": contract.name if contract else "",
+        "client_name": contract.client_name if contract else "",
+        "month_year": month_year,
+        "billing_rate": float(BILLING_RATE),
+        "lines": lines,
+        "total_amount": round(monthly_billable, 2),
+        "total_hours": total_hours,
+        "ops_cost": round(monthly_ops, 2),
+        "owner_margin": round(monthly_billable - monthly_ops, 2),
+    }
 
 
 @router.get("/forecast-vs-actual")

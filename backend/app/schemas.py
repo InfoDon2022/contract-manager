@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field, model_validator
 from decimal import Decimal
 from datetime import date
 from typing import Optional
@@ -237,3 +237,94 @@ class DashboardOut(BaseModel):
     forecast_90: Decimal
     action_items: list[dict]
     monthly_pl: list[dict]
+
+
+# ── Weekly Entries ──
+
+class WeeklyEntryBase(BaseModel):
+    contract_id: str
+    week_number: int
+    week_start: date
+    week_end: date
+    person_name: str
+    major_task: str = ""
+    task_code: str
+    subtask_description: str = ""
+    entry_type: str
+    hourly_rate: Optional[Decimal] = None
+    hours: Optional[Decimal] = None
+    flat_amount: Optional[Decimal] = None
+
+    @model_validator(mode="after")
+    def validate_amounts(self):
+        if self.entry_type == "hourly_labor":
+            if self.hours is None or self.hourly_rate is None:
+                raise ValueError("hourly_labor entries require hours and hourly_rate")
+        else:
+            if self.flat_amount is None:
+                raise ValueError(f"{self.entry_type} entries require flat_amount")
+        return self
+
+class WeeklyEntryCreate(WeeklyEntryBase):
+    pass
+
+class WeeklyEntryUpdate(WeeklyEntryBase):
+    pass
+
+class WeeklyEntryOut(WeeklyEntryBase):
+    id: str
+    model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def line_cost(self) -> Decimal:
+        if self.hours is not None and self.hourly_rate is not None:
+            return self.hours * self.hourly_rate
+        return self.flat_amount or Decimal("0")
+
+
+# ── Subcontractor Task Allocations ──
+
+class TaskAllocationBase(BaseModel):
+    contract_id: str
+    vendor_id: str
+    major_task_name: str
+    total_task_payment: Decimal = Decimal("0")
+    month_year: str
+    month_amount: Decimal = Decimal("0")
+    percent_of_task: Decimal = Decimal("0")
+
+class TaskAllocationCreate(TaskAllocationBase):
+    pass
+
+class TaskAllocationUpdate(TaskAllocationBase):
+    pass
+
+class TaskAllocationOut(TaskAllocationBase):
+    id: str
+    model_config = {"from_attributes": True}
+
+
+# ── Owner Profit ──
+
+class OwnerProfitBase(BaseModel):
+    contract_id: str
+    month_year: str
+    gross_income: Decimal = Decimal("0")
+    subcontractor_costs: Decimal = Decimal("0")
+    direct_expenses: Decimal = Decimal("0")
+    indirect_expenses: Decimal = Decimal("0")
+    tax_rate: Decimal = Decimal("0.40")
+
+class OwnerProfitCreate(OwnerProfitBase):
+    pass
+
+class OwnerProfitUpdate(OwnerProfitBase):
+    pass
+
+class OwnerProfitOut(OwnerProfitBase):
+    id: str
+    owner_profit: Decimal
+    tax_set_aside: Decimal
+    net_profit: Decimal
+    model_config = {"from_attributes": True}
