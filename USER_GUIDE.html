@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contract Manager — User Guide</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181b23;
+      --surface2: #1e222d;
+      --border: #2a2f3c;
+      --text: #e8eaf0;
+      --muted: #8b91a3;
+      --dim: #5a6078;
+      --accent: #4f8cff;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --purple: #a78bfa;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 28px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 22px 16px;
+    }
+    .sidebar a {
+      display: block;
+      padding: 8px 22px;
+      font-size: 13px;
+      color: var(--muted);
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .sidebar a:hover, .sidebar a.active {
+      color: var(--text);
+      background: var(--surface2);
+      border-left-color: var(--accent);
+      text-decoration: none;
+    }
+    .sidebar .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 18px 22px 6px;
+    }
+    .content {
+      flex: 1;
+      padding: 48px 56px;
+      max-width: 860px;
+    }
+
+    /* Typography */
+    h1 { font-size: 32px; font-weight: 800; margin-bottom: 10px; }
+    h2 { font-size: 22px; font-weight: 700; margin: 48px 0 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+    h3 { font-size: 16px; font-weight: 700; margin: 28px 0 10px; color: var(--accent); }
+    h4 { font-size: 14px; font-weight: 600; margin: 18px 0 8px; color: var(--amber); }
+    p { margin-bottom: 12px; color: var(--text); }
+    ul, ol { margin: 8px 0 14px 20px; }
+    li { margin-bottom: 5px; }
+    strong { color: var(--text); font-weight: 600; }
+
+    /* Code */
+    code {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--green);
+    }
+
+    /* Callout boxes */
+    .callout {
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-left: 4px solid;
+      font-size: 14px;
+    }
+    .callout.info { background: rgba(79,140,255,.1); border-color: var(--accent); }
+    .callout.tip { background: rgba(52,211,153,.1); border-color: var(--green); }
+    .callout.warn { background: rgba(251,191,36,.1); border-color: var(--amber); }
+    .callout-title { font-weight: 700; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .callout.info .callout-title { color: var(--accent); }
+    .callout.tip .callout-title { color: var(--green); }
+    .callout.warn .callout-title { color: var(--amber); }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+    th { padding: 9px 12px; text-align: left; background: var(--surface2); border-bottom: 2px solid var(--border); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; }
+    td { padding: 9px 12px; border-bottom: 1px solid rgba(42,47,60,.6); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(30,34,45,.5); }
+
+    /* Nav badges */
+    .nav-icon {
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      line-height: 22px;
+      text-align: center;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 11px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .badge-new { background: rgba(52,211,153,.15); color: var(--green); }
+    .badge-existing { background: rgba(79,140,255,.15); color: var(--accent); }
+
+    /* Steps */
+    .steps { counter-reset: step; }
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .step-num {
+      counter-increment: step;
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step-body { flex: 1; padding-top: 4px; }
+
+    /* Formula box */
+    .formula {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--amber);
+      margin: 12px 0;
+      white-space: pre-wrap;
+    }
+
+    /* Hero */
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 32px;
+      margin-bottom: 36px;
+    }
+    .hero-sub { color: var(--muted); font-size: 15px; margin-top: 6px; }
+    .hero-meta { color: var(--dim); font-size: 12px; margin-top: 12px; }
+
+    /* Chart illustration */
+    .chart-demo {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 14px 0;
+    }
+
+    /* Flow diagram */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      margin: 14px 0;
+    }
+    .flow-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .flow-box.accent { background: rgba(79,140,255,.12); border-color: var(--accent); color: var(--accent); }
+    .flow-box.green { background: rgba(52,211,153,.1); border-color: var(--green); color: var(--green); }
+    .flow-box.amber { background: rgba(251,191,36,.1); border-color: var(--amber); color: var(--amber); }
+    .flow-arrow { padding: 0 10px; color: var(--dim); font-size: 18px; }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .content { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-title">User Guide</div>
+    <a href="#overview">Overview</a>
+    <a href="#how-it-works">How It All Works Together</a>
+    <div class="section-label">New Features</div>
+    <a href="#weekly-costs">Weekly Costs</a>
+    <a href="#task-allocations">Task Allocations</a>
+    <a href="#owner-profit">Owner Profit</a>
+    <a href="#invoice-generator">Invoice Generator</a>
+    <a href="#dashboard-updates">Dashboard Updates</a>
+    <div class="section-label">Reference</div>
+    <a href="#task-codes">Task Codes</a>
+    <a href="#entry-types">Entry Types</a>
+    <a href="#formulas">Formulas &amp; Calculations</a>
+    <a href="#workflow">Recommended Workflow</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+
+  <!-- Main content -->
+  <main class="content">
+
+    <div class="hero">
+      <h1>Contract Manager</h1>
+      <div class="hero-sub">Financial Tracking &amp; Billing Guide — Vermont Contract Edition</div>
+      <div class="hero-meta">Updated March 2026 &nbsp;·&nbsp; Covers new Weekly Costs, Owner Profit, Invoice Generator, and Dashboard Chart features</div>
+    </div>
+
+    <!-- ── OVERVIEW ── -->
+    <h2 id="overview">Overview</h2>
+    <p>
+      This app is your single source of truth for tracking the Vermont state contract. It replaces the two Excel
+      spreadsheets you've been using by storing weekly cost entries, computing billing automatically, generating
+      invoices at $145/hr, and showing you exactly how much you're keeping as the owner after taxes.
+    </p>
+    <p>The navigation bar on the left has 11 sections. Three are brand new:</p>
+
+    <table>
+      <thead><tr><th>Icon</th><th>Page</th><th>What It Does</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><span class="nav-icon">◉</span></td><td><strong>Dashboard</strong></td><td>Financial snapshot + income/expense chart + burn bar</td><td><span class="badge badge-existing">Updated</span></td></tr>
+        <tr><td><span class="nav-icon">◫</span></td><td><strong>Weekly Costs</strong></td><td>Enter hours and flat costs by person, task, and week</td><td><span class="badge badge-new">New</span></td></tr>
+        <tr><td><span class="nav-icon">◈</span></td><td><strong>Client Invoices</strong></td><td>Invoice list + auto-generate invoice from weekly entries</td><td><span class="badge badge-existing">Updated</span></td></tr>
+        <tr><td><span class="nav-icon">◪</span></td><td><strong>Task Allocations</strong></td><td>Set how much each subcontractor earns per task/month</td><td><span class="badge badge-new">New</span></td></tr>
+        <tr><td><span class="nav-icon">◬</span></td><td><strong>Owner Profit</strong></td><td>Monthly profit tracking with 40% tax set-aside</td><td><span class="badge badge-new">New</span></td></tr>
+        <tr><td><span class="nav-icon">◇</span></td><td>Vendors</td><td>Subcontractor and vendor contact records</td><td></td></tr>
+        <tr><td><span class="nav-icon">◆</span></td><td>Vendor Bills</td><td>Track bills from subcontractors</td><td></td></tr>
+        <tr><td><span class="nav-icon">○</span></td><td>Direct Costs</td><td>One-off expenses (travel, supplies, etc.)</td><td></td></tr>
+        <tr><td><span class="nav-icon">◎</span></td><td>Forecast</td><td>30/60/90-day cash flow projection</td><td></td></tr>
+        <tr><td><span class="nav-icon">▤</span></td><td>Reports</td><td>Exported summaries and P&amp;L</td><td></td></tr>
+        <tr><td><span class="nav-icon">⚙</span></td><td>Settings</td><td>Contract and bank account configuration</td><td></td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── HOW IT WORKS TOGETHER ── -->
+    <h2 id="how-it-works">How It All Works Together</h2>
+    <p>
+      Everything flows from a single source: <strong>Weekly Cost Entries</strong>. When you add entries, every
+      other number in the app updates automatically — the dashboard chart, billing totals, invoice amounts,
+      and profit calculations all derive from those entries.
+    </p>
+
+    <div class="flow">
+      <div class="flow-box accent">Weekly Entries<br><small style="font-weight:400;font-size:11px">hours × rate or flat $</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Weekly Summary<br><small style="font-weight:400;font-size:11px">ops cost + margin</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box amber">Monthly Billing<br><small style="font-weight:400;font-size:11px">billable ÷ $145 = hrs</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box green">Invoice to VT<br><small style="font-weight:400;font-size:11px">by task code</small></div>
+    </div>
+    <div class="flow" style="margin-top:0;">
+      <div class="flow-box accent">Weekly Entries</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box green">Owner Profit<br><small style="font-weight:400;font-size:11px">auto-compute</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box amber">Tax Set-Aside<br><small style="font-weight:400;font-size:11px">40% of profit</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Dashboard Chart<br><small style="font-weight:400;font-size:11px">income vs expenses</small></div>
+    </div>
+
+    <div class="callout info">
+      <div class="callout-title">Key Principle</div>
+      The contract max is <strong>$209,000</strong> billed to the State of Vermont at <strong>$145/hr</strong>.
+      Owner Draw = <code>$209,000 − total ops costs</code>. That margin is distributed proportionally across
+      each week and added to the week's ops cost to get the billable amount.
+    </div>
+
+    <!-- ── WEEKLY COSTS ── -->
+    <h2 id="weekly-costs">◫ Weekly Costs <span class="badge badge-new" style="font-size:12px">New</span></h2>
+    <p>
+      This is the primary data entry screen. It mirrors the "By Week Costs" tab in your Excel spreadsheet
+      and is the ground truth for all financial calculations.
+    </p>
+
+    <h3>Top stat cards</h3>
+    <ul>
+      <li><strong>Total Ops Cost</strong> — all subcontractor + direct costs entered so far</li>
+      <li><strong>Owner Draw</strong> — Contract Value ($209K) minus Total Ops Cost</li>
+      <li><strong>Contract Value</strong> — the $209K ceiling</li>
+      <li><strong>Total Weeks</strong> — number of distinct weeks that have entries</li>
+    </ul>
+
+    <h3>Weekly summary table</h3>
+    <p>
+      Each row represents one work week. Click a row to load that week's individual entries in the panel below.
+      The table shows:
+    </p>
+    <table>
+      <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Week</td><td>Week number (e.g. Week 1, Week 2)</td></tr>
+        <tr><td>Dates</td><td>The week_start and week_end dates you entered</td></tr>
+        <tr><td>Ops Cost</td><td>Total of all line costs for that week (labor + flat fees + direct costs)</td></tr>
+        <tr><td>+ Margin</td><td>This week's share of the owner draw, allocated proportionally</td></tr>
+        <tr><td>= Billable</td><td>Ops Cost + Margin = what gets billed to VT for this week</td></tr>
+        <tr><td>Hours @ $145</td><td>Billable ÷ $145 = equivalent hours on the State invoice</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <div class="callout-title">Proportional Allocation</div>
+      If total ops cost is $50,000 and one week's ops cost is $5,000 (10% of total), that week gets 10% of
+      the owner draw added as margin. This keeps billing proportional to actual activity.
+    </div>
+
+    <h3>Adding an entry</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">Click <strong>+ Add Entry</strong> (top right of the entries panel)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          Fill in the form:
+          <ul>
+            <li><strong>Person</strong> — who did the work (Ben, Garra, Joelle, Meagan, VT Consultant, COST, Owner)</li>
+            <li><strong>Task Code</strong> — which contract task (A through H, or OH for Overhead)</li>
+            <li><strong>Major Task</strong> — the specific deliverable (e.g. "Network Mtg #1 (May)")</li>
+            <li><strong>Entry Type</strong> — see Entry Types section below</li>
+            <li><strong>Week Number</strong> — which week of the contract (1, 2, 3…)</li>
+            <li><strong>Week Start / End</strong> — calendar dates for that week</li>
+          </ul>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          If <strong>Hourly Labor</strong>: enter <strong>Hours</strong> and <strong>Hourly Rate ($)</strong>.
+          A live preview shows the line cost as you type.<br><br>
+          If any other type: enter a single <strong>Flat Amount ($)</strong>.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">Click <strong>Save</strong>. The weekly summary table updates immediately.</div>
+      </div>
+    </div>
+
+    <h3>Editing or deleting an entry</h3>
+    <p>Click any row in the entries table to open the edit modal. Make changes and click <strong>Save</strong>, or click the red <strong>Delete</strong> button to remove the entry entirely.</p>
+
+    <!-- ── TASK ALLOCATIONS ── -->
+    <h2 id="task-allocations">◪ Task Allocations <span class="badge badge-new" style="font-size:12px">New</span></h2>
+    <p>
+      This page tracks how much each subcontractor should be paid per task per month,
+      and generates a <strong>Payout Report</strong> showing exactly what to send each person.
+    </p>
+
+    <h3>Payout Report</h3>
+    <p>
+      Select a month at the top of the page to see a breakdown by vendor showing:
+    </p>
+    <ul>
+      <li>Which task(s) they worked on</li>
+      <li>Their percentage of that task's total payment</li>
+      <li>Their dollar amount for that task that month</li>
+      <li>A <strong>vendor total</strong> — the check amount to write</li>
+    </ul>
+
+    <h3>Adding an allocation</h3>
+    <p>Click <strong>+ Add Allocation</strong> and fill in:</p>
+    <ul>
+      <li><strong>Vendor</strong> — the subcontractor (must exist in the Vendors page first)</li>
+      <li><strong>Major Task Name</strong> — the task category</li>
+      <li><strong>Total Task Payment</strong> — total amount budgeted for this task overall</li>
+      <li><strong>Month</strong> — which month (YYYY-MM format)</li>
+      <li><strong>Month Amount</strong> — how much of that total is allocated this month</li>
+      <li><strong>% of Task</strong> — this vendor's percentage share (e.g. 0.50 for 50%)</li>
+    </ul>
+
+    <!-- ── OWNER PROFIT ── -->
+    <h2 id="owner-profit">◬ Owner Profit <span class="badge badge-new" style="font-size:12px">New</span></h2>
+    <p>
+      Track your monthly take-home after paying subcontractors and covering expenses.
+      The app automatically sets aside 40% for taxes so you always know what's truly available.
+    </p>
+
+    <h3>Summary stat cards (appear once you have records)</h3>
+    <ul>
+      <li><strong>Total Income</strong> — sum of all gross income entries</li>
+      <li><strong>Total Expenses</strong> — sub costs + direct + indirect combined</li>
+      <li><strong>Owner Profit</strong> — income minus all expenses</li>
+      <li><strong>Tax Set-Aside</strong> — 40% of owner profit, reserved for taxes</li>
+      <li><strong>Net After Tax</strong> — what you actually keep</li>
+    </ul>
+
+    <h3>Adding a month</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">Click <strong>+ Add Month</strong> and select the month.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          Click <strong>⚡ Auto-Compute</strong> to pull actuals automatically:
+          <ul>
+            <li>Gross income is pulled from Client Invoices for that month</li>
+            <li>Subcontractor costs are pulled from <code>hourly_labor</code> and <code>flat_fee</code> Weekly Entries</li>
+            <li>Direct expenses are pulled from <code>direct_cost</code> and <code>travel_stipend</code> entries</li>
+          </ul>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          Review or adjust the numbers. The <strong>live preview panel</strong> shows your owner profit,
+          tax set-aside, and net after tax as you type — before saving.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">Click <strong>Save</strong>. If a record for that month already exists, it is updated (no duplicate entries).</div>
+      </div>
+    </div>
+
+    <div class="formula">
+Owner Profit  = Gross Income − Subcontractor Costs − Direct Expenses − Indirect Expenses
+Tax Set-Aside = Owner Profit × 40%
+Net After Tax = Owner Profit − Tax Set-Aside</div>
+
+    <div class="callout warn">
+      <div class="callout-title">Indirect Expenses</div>
+      Indirect expenses (overhead that isn't directly billable) default to $0. Add them manually if you have
+      costs like software subscriptions or home office expenses that should reduce your profit.
+    </div>
+
+    <!-- ── INVOICE GENERATOR ── -->
+    <h2 id="invoice-generator">◈ Invoice Generator <span class="badge badge-existing" style="font-size:12px">Updated</span></h2>
+    <p>
+      The Invoice Generator lives at the top of the <strong>Client Invoices</strong> page. It reads your
+      weekly entries for a given month and produces a ready-to-use invoice broken down by task code.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">Go to <strong>Client Invoices</strong> (◈ in the nav).</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">Under <strong>Invoice Generator</strong>, select the billing month and click <strong>Calculate Invoice</strong>.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          The app shows a breakdown by task code:
+          <ul>
+            <li><strong>Billable Amount</strong> — ops cost + proportional owner margin for entries in that task</li>
+            <li><strong>Hours @ $145</strong> — billable amount ÷ $145/hr</li>
+          </ul>
+          Plus totals for the month, and a footnote showing ops cost vs. owner margin split.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          Click <strong>→ Create Invoice Draft</strong> to pre-fill a new invoice with:
+          <ul>
+            <li>Total amount from the calculation</li>
+            <li>Billing period start/end dates auto-set to the selected month</li>
+            <li>Notes showing total hours and rate</li>
+          </ul>
+          Review and click <strong>Save</strong> to create the invoice record.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DASHBOARD UPDATES ── -->
+    <h2 id="dashboard-updates">◉ Dashboard Updates <span class="badge badge-existing" style="font-size:12px">Updated</span></h2>
+
+    <h3>Income vs. Expenses Chart</h3>
+    <p>
+      The new SVG chart shows a monthly view of your financial position derived from weekly entries.
+      Three data series are displayed:
+    </p>
+    <ul>
+      <li><strong style="color:#4f8cff">Blue bars</strong> — Monthly income (billable amount = ops + owner margin)</li>
+      <li><strong style="color:#fbbf24">Amber bars</strong> — Monthly expenses (ops cost only)</li>
+      <li><strong style="color:#34d399">Green line</strong> — Owner profit for the month</li>
+    </ul>
+    <p>The chart only appears once you have Weekly Cost entries with dates spanning multiple months.</p>
+
+    <h3>Contract Burn Bar</h3>
+    <p>
+      A horizontal progress bar showing what percentage of the <strong>$209,000 contract maximum</strong>
+      has been consumed. The bar turns amber when you exceed 75% and red when you exceed 90%.
+    </p>
+    <p>It reads from your Weekly Cost billing totals first, falling back to the Billed to Date figure
+    from Client Invoices if no weekly entries exist yet.</p>
+
+    <h3>Monthly Billing Summary table</h3>
+    <p>
+      A compact table (appears on the dashboard when weekly entries exist) showing for each month:
+      Ops Cost, + Margin, = Billable, and Hours @ $145.
+    </p>
+
+    <!-- ── TASK CODES ── -->
+    <h2 id="task-codes">Task Codes Reference</h2>
+    <p>These match the Vermont contract scope of work:</p>
+
+    <table>
+      <thead><tr><th>Code</th><th>Task Name</th></tr></thead>
+      <tbody>
+        <tr><td><code>A</code></td><td>Implementation Workplan</td></tr>
+        <tr><td><code>B</code></td><td>Quarterly Reports</td></tr>
+        <tr><td><code>C</code></td><td>Community Network Engagement Meetings</td></tr>
+        <tr><td><code>D</code></td><td>Training &amp; Education</td></tr>
+        <tr><td><code>E</code></td><td>Lethal Means Safety and Secure Storage</td></tr>
+        <tr><td><code>F</code></td><td>Community Response</td></tr>
+        <tr><td><code>G</code></td><td>Strategic Plan Project Management</td></tr>
+        <tr><td><code>H</code></td><td>Evaluation Dashboard</td></tr>
+        <tr><td><code>OH</code></td><td>Overhead</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── ENTRY TYPES ── -->
+    <h2 id="entry-types">Entry Types Reference</h2>
+    <table>
+      <thead><tr><th>Type</th><th>When to Use</th><th>Fields Required</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>hourly_labor</code></td>
+          <td>Any person billing by the hour (Ben, Garra, Joelle, Meagan, etc.)</td>
+          <td>Hours + Hourly Rate</td>
+        </tr>
+        <tr>
+          <td><code>flat_fee</code></td>
+          <td>Subcontractor lump-sum payments not tied to hourly tracking</td>
+          <td>Flat Amount</td>
+        </tr>
+        <tr>
+          <td><code>direct_cost</code></td>
+          <td>Pass-through expenses: printing, venue rental, materials</td>
+          <td>Flat Amount</td>
+        </tr>
+        <tr>
+          <td><code>travel_stipend</code></td>
+          <td>Per-person travel reimbursements</td>
+          <td>Flat Amount</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <div class="callout-title">Which costs count toward subcontractor costs in Owner Profit?</div>
+      Auto-Compute treats <code>hourly_labor</code> and <code>flat_fee</code> entries as subcontractor costs.
+      <code>direct_cost</code> and <code>travel_stipend</code> entries are treated as direct expenses.
+    </div>
+
+    <!-- ── FORMULAS ── -->
+    <h2 id="formulas">Formulas &amp; Calculations</h2>
+
+    <h3>Line cost (per entry)</h3>
+    <div class="formula">Hourly labor:  Hours × Hourly Rate
+All other types: Flat Amount</div>
+
+    <h3>Weekly ops cost</h3>
+    <div class="formula">Week Ops Cost = sum of all line costs for entries in that week</div>
+
+    <h3>Owner draw (contract-level)</h3>
+    <div class="formula">Owner Draw = Contract Value ($209,000) − Total Ops Cost (all weeks)</div>
+
+    <h3>Weekly margin allocation</h3>
+    <div class="formula">Week Margin = (Week Ops Cost ÷ Total Ops Cost) × Owner Draw</div>
+
+    <h3>Weekly billable</h3>
+    <div class="formula">Billable = Week Ops Cost + Week Margin</div>
+
+    <h3>Billing rate conversion</h3>
+    <div class="formula">Hours to Invoice = Billable ÷ $145</div>
+
+    <h3>Monthly billing (for invoice generation)</h3>
+    <div class="formula">Weeks are attributed to the month of their week_start date.
+Monthly Billable = sum of Billable for all weeks starting in that month.</div>
+
+    <h3>Owner profit</h3>
+    <div class="formula">Owner Profit  = Gross Income − Sub Costs − Direct Expenses − Indirect Expenses
+Tax Set-Aside = Owner Profit × Tax Rate (default 40%)
+Net After Tax = Owner Profit − Tax Set-Aside</div>
+
+    <!-- ── WORKFLOW ── -->
+    <h2 id="workflow">Recommended Weekly/Monthly Workflow</h2>
+
+    <h4>Every week (as work happens)</h4>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">Go to <strong>Weekly Costs</strong>. Click <strong>+ Add Entry</strong> for each person/task combination that had activity this week.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">Make sure each entry has the correct <strong>Week Number</strong> and <strong>Week Start/End</strong> dates. The week number should increment each week (Week 1, Week 2, …).</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">Verify the weekly summary row looks right — ops cost should match what you paid out, and billable should be higher (ops + margin).</div>
+      </div>
+    </div>
+
+    <h4>End of each month</h4>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">Go to <strong>Client Invoices</strong>. Under Invoice Generator, select the month and click <strong>Calculate Invoice</strong>. Review the task-code breakdown.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">Click <strong>→ Create Invoice Draft</strong>, fill in the invoice number, set status to <strong>Sent</strong>, and save.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">Go to <strong>Task Allocations</strong>. Add allocations for each subcontractor for the month, then check the Payout Report to see what to pay each person.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">Go to <strong>Owner Profit</strong>. Click <strong>+ Add Month</strong>, select the month, and click <strong>⚡ Auto-Compute</strong>. Review the preview (profit, tax set-aside, net), then Save.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">When VT pays the invoice, go back to <strong>Client Invoices</strong>, click the invoice row, and click <strong>Record Payment</strong>.</div>
+      </div>
+    </div>
+
+    <!-- ── FAQ ── -->
+    <h2 id="faq">Frequently Asked Questions</h2>
+
+    <h3>What if a week spans two months?</h3>
+    <p>
+      The entire week is attributed to the month of its <strong>week_start</strong> date. For example, a week
+      starting January 29 and ending February 4 counts as a January week for billing purposes. If this causes
+      an issue, split it into two entries with different week numbers.
+    </p>
+
+    <h3>Can I change the tax rate from 40%?</h3>
+    <p>
+      Yes. When adding or editing an Owner Profit record, change the <strong>Tax Rate</strong> field
+      (e.g. enter <code>0.35</code> for 35%). The live preview updates immediately.
+    </p>
+
+    <h3>What if I haven't entered any weekly entries yet?</h3>
+    <p>
+      The Dashboard chart and billing tables won't show data until you have at least a few weekly entries.
+      The dashboard will fall back to showing Billed to Date from Client Invoices. Start by entering a
+      couple of weeks of history from your Excel spreadsheet.
+    </p>
+
+    <h3>Do I need to enter Task Allocations for the Invoice Generator to work?</h3>
+    <p>
+      No. The Invoice Generator reads from Weekly Entries only, not Task Allocations. Task Allocations are
+      used solely for the subcontractor Payout Report — what you owe each person.
+    </p>
+
+    <h3>The Owner Profit auto-compute shows $0 for gross income. Why?</h3>
+    <p>
+      Auto-Compute pulls gross income from <strong>Client Invoices</strong> with a date in the selected month.
+      If you haven't created a client invoice for that month yet, income will be $0. Generate the invoice first
+      (or enter it manually), then run auto-compute.
+    </p>
+
+    <h3>Can I have more than one contract?</h3>
+    <p>
+      The app currently loads the first contract in the system for all financial calculations. If you need to
+      track a second contract, it would require a Settings update to support contract switching in the nav.
+    </p>
+
+    <h3>Where is the live URL?</h3>
+    <p>
+      The app is hosted on Render:<br>
+      <strong>Frontend:</strong> <a href="https://contract-manager.onrender.com" target="_blank">https://contract-manager.onrender.com</a><br>
+      <strong>API:</strong> <a href="https://contract-manager-api.onrender.com/api/health" target="_blank">https://contract-manager-api.onrender.com/api/health</a>
+    </p>
+
+    <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--dim);">
+      Contract Manager User Guide &nbsp;·&nbsp; Updated March 2026
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Highlight active sidebar link on scroll
+  const links = document.querySelectorAll('.sidebar a[href^="#"]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.sidebar a[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  document.querySelectorAll('h2[id], h3[id]').forEach(h => observer.observe(h));
+</script>
+</body>
+</html>
