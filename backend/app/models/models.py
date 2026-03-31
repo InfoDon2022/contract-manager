@@ -68,6 +68,13 @@ class BankAccountType(str, enum.Enum):
     savings = "savings"
 
 
+class EntryType(str, enum.Enum):
+    hourly_labor = "hourly_labor"
+    flat_fee = "flat_fee"
+    direct_cost = "direct_cost"
+    travel_stipend = "travel_stipend"
+
+
 # ── Models ──
 
 class Contract(Base):
@@ -92,6 +99,9 @@ class Contract(Base):
     vendor_bills: Mapped[list["VendorBill"]] = relationship(back_populates="contract")
     direct_costs: Mapped[list["DirectCost"]] = relationship(back_populates="contract")
     forecasts: Mapped[list["MonthlyForecast"]] = relationship(back_populates="contract")
+    weekly_entries: Mapped[list["WeeklyEntry"]] = relationship(back_populates="contract")
+    task_allocations: Mapped[list["SubcontractorTaskAllocation"]] = relationship(back_populates="contract")
+    profit_records: Mapped[list["OwnerProfitRecord"]] = relationship(back_populates="contract")
 
 
 class Workstream(Base):
@@ -125,6 +135,7 @@ class Vendor(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     bills: Mapped[list["VendorBill"]] = relationship(back_populates="vendor")
+    task_allocations: Mapped[list["SubcontractorTaskAllocation"]] = relationship(back_populates="vendor")
 
 
 class ClientInvoice(Base):
@@ -266,3 +277,63 @@ class BankAccount(Base):
     )
     opening_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class WeeklyEntry(Base):
+    __tablename__ = "weekly_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    contract_id: Mapped[str] = mapped_column(ForeignKey("contracts.id"))
+    week_number: Mapped[int] = mapped_column(nullable=False)
+    week_start: Mapped[date] = mapped_column(Date, nullable=False)
+    week_end: Mapped[date] = mapped_column(Date, nullable=False)
+    person_name: Mapped[str] = mapped_column(String(100))
+    major_task: Mapped[str] = mapped_column(String(255), default="")
+    task_code: Mapped[str] = mapped_column(String(10))
+    subtask_description: Mapped[str] = mapped_column(Text, default="")
+    entry_type: Mapped[EntryType] = mapped_column(Enum(EntryType))
+    hourly_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    hours: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
+    flat_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    contract: Mapped["Contract"] = relationship(back_populates="weekly_entries")
+
+
+class SubcontractorTaskAllocation(Base):
+    __tablename__ = "subcontractor_task_allocations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    contract_id: Mapped[str] = mapped_column(ForeignKey("contracts.id"))
+    vendor_id: Mapped[str] = mapped_column(ForeignKey("vendors.id"))
+    major_task_name: Mapped[str] = mapped_column(String(255))
+    total_task_payment: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    month_year: Mapped[str] = mapped_column(String(7))
+    month_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    percent_of_task: Mapped[Decimal] = mapped_column(Numeric(6, 4), default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    contract: Mapped["Contract"] = relationship(back_populates="task_allocations")
+    vendor: Mapped["Vendor"] = relationship(back_populates="task_allocations")
+
+
+class OwnerProfitRecord(Base):
+    __tablename__ = "owner_profit_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    contract_id: Mapped[str] = mapped_column(ForeignKey("contracts.id"))
+    month_year: Mapped[str] = mapped_column(String(7))
+    gross_income: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    subcontractor_costs: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    direct_expenses: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    indirect_expenses: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    owner_profit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal("0.40"))
+    tax_set_aside: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    net_profit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    contract: Mapped["Contract"] = relationship(back_populates="profit_records")

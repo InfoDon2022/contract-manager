@@ -8,6 +8,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const monthLabel = (m) => { const [y, mo] = m.split("-"); return new Date(y, mo - 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
 const daysDiff = (a, b) => Math.floor((new Date(b) - new Date(a)) / 86400000);
 const sum = (arr, key) => arr.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 const MONO = `'JetBrains Mono', 'Fira Code', monospace`;
 const FONT = `'DM Sans', 'Segoe UI', system-ui, sans-serif`;
@@ -25,6 +26,35 @@ const STATUS_COLORS = {
   partially_paid: "#f59e0b", paid: "#10b981", active: "#10b981", planned: "#6b7280",
   incurred: "#f59e0b", overdue: "#ef4444",
 };
+
+const TASK_CODES = [
+  { value: "A", label: "A: Implementation Workplan" },
+  { value: "B", label: "B: Quarterly Reports" },
+  { value: "C", label: "C: Community Network Engagement Meetings" },
+  { value: "D", label: "D: Training & Education" },
+  { value: "E", label: "E: Lethal Means Safety and Secure Storage" },
+  { value: "F", label: "F: Community Response" },
+  { value: "G", label: "G: Strategic Plan Project Management" },
+  { value: "H", label: "H: Evaluation Dashboard" },
+  { value: "OH", label: "OH: Overhead" },
+];
+
+const PERSON_NAMES = [
+  { value: "Ben", label: "Ben" },
+  { value: "Garra", label: "Garra" },
+  { value: "Joelle", label: "Joelle" },
+  { value: "Meagan", label: "Meagan" },
+  { value: "VT Consultant", label: "VT Consultant" },
+  { value: "COST", label: "COST (Direct Cost)" },
+  { value: "Owner", label: "Owner" },
+];
+
+const ENTRY_TYPES = [
+  { value: "hourly_labor", label: "Hourly Labor" },
+  { value: "flat_fee", label: "Flat Fee" },
+  { value: "direct_cost", label: "Direct Cost" },
+  { value: "travel_stipend", label: "Travel Stipend" },
+];
 
 // ─── Shared Components ───
 const Card = ({ children, style }) => <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, ...style }}>{children}</div>;
@@ -100,17 +130,150 @@ const MiniBar = ({ data, height = 180 }) => {
   );
 };
 
-// ─── Dashboard (reads from /api/dashboard) ───
-function Dashboard() {
+// ─── Income vs Expenses Chart (pure SVG, no dependencies) ───
+function IncomeExpenseChart({ data, height = 200 }) {
+  if (!data || data.length === 0) {
+    return <div style={{ color: C.textDim, padding: 30, textAlign: "center" }}>Enter weekly cost data to see chart</div>;
+  }
+  const W = 600;
+  const H = height;
+  const PAD = { top: 20, right: 20, bottom: 36, left: 64 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const maxVal = Math.max(...data.flatMap(d => [d.income, d.expenses]), 1);
+  const barGroupW = chartW / data.length;
+  const barW = Math.min(barGroupW * 0.32, 28);
+  const gap = 3;
+
+  const yTicks = 4;
+  const yStep = maxVal / yTicks;
+
+  const toY = (v) => PAD.top + chartH - (v / maxVal) * chartH;
+  const profitPoints = data.map((d, i) => {
+    const cx = PAD.left + i * barGroupW + barGroupW / 2;
+    const cy = toY(Math.max(d.owner_profit, 0));
+    return `${cx},${cy}`;
+  }).join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: H }}>
+      {/* Y axis gridlines + labels */}
+      {Array.from({ length: yTicks + 1 }, (_, i) => {
+        const v = yStep * i;
+        const y = toY(v);
+        return (
+          <g key={i}>
+            <line x1={PAD.left} y1={y} x2={PAD.left + chartW} y2={y} stroke={C.border} strokeWidth={1} />
+            <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={9} fill={C.textDim} fontFamily={MONO}>
+              {fmtShort(v)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Bars */}
+      {data.map((d, i) => {
+        const groupX = PAD.left + i * barGroupW;
+        const centerX = groupX + barGroupW / 2;
+        const incomeX = centerX - barW - gap / 2;
+        const expenseX = centerX + gap / 2;
+        const incomeH = (d.income / maxVal) * chartH;
+        const expenseH = (d.expenses / maxVal) * chartH;
+        return (
+          <g key={i}>
+            {/* Income bar */}
+            <rect
+              x={incomeX} y={toY(d.income)} width={barW} height={incomeH}
+              fill={C.accent} fillOpacity={0.7} rx={2}
+            />
+            {/* Expense bar */}
+            <rect
+              x={expenseX} y={toY(d.expenses)} width={barW} height={expenseH}
+              fill={C.amber} fillOpacity={0.7} rx={2}
+            />
+            {/* X label */}
+            <text x={centerX} y={H - 4} textAnchor="middle" fontSize={9} fill={C.textDim} fontFamily={MONO}>
+              {d.month.slice(5)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Owner profit line */}
+      {data.length > 1 && (
+        <polyline
+          points={profitPoints}
+          fill="none"
+          stroke={C.green}
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+      )}
+      {data.map((d, i) => {
+        const cx = PAD.left + i * barGroupW + barGroupW / 2;
+        const cy = toY(Math.max(d.owner_profit, 0));
+        return <circle key={i} cx={cx} cy={cy} r={3} fill={C.green} />;
+      })}
+
+      {/* Legend */}
+      <rect x={PAD.left} y={4} width={10} height={10} fill={C.accent} fillOpacity={0.7} rx={2} />
+      <text x={PAD.left + 14} y={13} fontSize={9} fill={C.textMuted} fontFamily={FONT}>Billable Income</text>
+      <rect x={PAD.left + 100} y={4} width={10} height={10} fill={C.amber} fillOpacity={0.7} rx={2} />
+      <text x={PAD.left + 114} y={13} fontSize={9} fill={C.textMuted} fontFamily={FONT}>Expenses</text>
+      <circle cx={PAD.left + 204} cy={9} r={4} fill={C.green} />
+      <text x={PAD.left + 212} y={13} fontSize={9} fill={C.textMuted} fontFamily={FONT}>Owner Profit</text>
+    </svg>
+  );
+}
+
+// ─── Contract Burn Bar ───
+function BurnBar({ totalValue, totalBillable }) {
+  const pct = totalValue > 0 ? Math.min((totalBillable / totalValue) * 100, 100) : 0;
+  const remaining = totalValue - totalBillable;
+  const color = pct > 90 ? C.red : pct > 70 ? C.amber : C.green;
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textMuted, marginBottom: 6 }}>
+        <span>Contract Burn: {fmt(totalBillable)} of {fmt(totalValue)}</span>
+        <span style={{ color }}>{pct.toFixed(1)}% used — {fmt(remaining)} remaining</span>
+      </div>
+      <div style={{ height: 10, borderRadius: 99, background: C.surface2, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${C.accent}, ${color})`, borderRadius: 99, transition: "width 0.5s ease" }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard ───
+function Dashboard({ contractId }) {
   const [d, setD] = useState(null);
-  useEffect(() => { api.getDashboard().then(setD).catch(console.error); }, []);
+  const [chartData, setChartData] = useState([]);
+  const [billing, setBilling] = useState(null);
+
+  const load = useCallback(async () => {
+    const [dash, chart] = await Promise.all([
+      api.getDashboard(),
+      contractId ? api.getDashboardMonthlyChart(contractId) : Promise.resolve([]),
+    ]);
+    setD(dash);
+    setChartData(chart);
+    if (contractId) {
+      api.getMonthlyBilling(contractId).then(setBilling).catch(() => {});
+    }
+  }, [contractId]);
+
+  useEffect(() => { load(); }, [load]);
+
   if (!d) return <div style={{ color: C.textDim, padding: 40, textAlign: "center" }}>Loading dashboard...</div>;
 
   const plData = (d.monthly_pl || []).map(r => ({ label: monthLabel(r.month), value: r.net }));
   const margin = d.margin_pct;
+  const totalWeeklyBillable = chartData.reduce((s, m) => s + m.income, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* KPI cards */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
         <StatCard label="Cash on Hand" value={fmt(d.cash_on_hand)} icon="💵" color={d.cash_on_hand >= 0 ? C.green : C.red} />
         <StatCard label="Billed to Date" value={fmt(d.total_billed)} sub={`of ${fmt(d.contract_value)}`} icon="📄" color={C.accent} />
@@ -118,11 +281,44 @@ function Dashboard() {
         <StatCard label="Total Costs" value={fmt(d.total_costs)} sub={`AP: ${fmt(d.unpaid_ap)}`} icon="📊" color={C.amber} />
         <StatCard label="Projected Margin" value={`${margin.toFixed(1)}%`} icon="📈" color={margin >= 20 ? C.green : margin >= 0 ? C.amber : C.red} />
       </div>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-        <Card style={{ flex: "2 1 300px" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>MONTHLY NET INCOME</div>
-          {plData.length > 0 ? <MiniBar data={plData} /> : <div style={{ color: C.textDim, padding: 30, textAlign: "center" }}>Enter invoices and bills to see chart</div>}
+
+      {/* Contract burn bar */}
+      {d.contract_value > 0 && (
+        <Card>
+          <BurnBar totalValue={Number(d.contract_value)} totalBillable={totalWeeklyBillable || Number(d.total_billed)} />
         </Card>
+      )}
+
+      {/* Income vs Expenses chart */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>INCOME vs EXPENSES (from Weekly Cost Entries)</div>
+        <IncomeExpenseChart data={chartData} />
+      </Card>
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        {/* Monthly billing summary */}
+        {billing && billing.length > 0 && (
+          <Card style={{ flex: "2 1 300px", overflowX: "auto" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>MONTHLY BILLING SUMMARY</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: MONO }}>
+              <thead><tr>
+                {["Month", "Ops Cost", "+ Margin", "= Billable", "Hours @$145"].map(h => (
+                  <th key={h} style={{ padding: "6px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}`, color: C.textMuted, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>{billing.map(r => (
+                <tr key={r.month_year}>
+                  <td style={{ padding: "7px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}20`, fontFamily: FONT }}>{monthLabel(r.month_year)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20` }}>{fmt(r.ops_cost)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, color: C.green }}>{fmt(r.allocated_margin)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, fontWeight: 700, color: C.accent }}>{fmt(r.billable)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, color: C.textMuted }}>{Number(r.hours_at_145).toFixed(2)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </Card>
+        )}
+
         <Card style={{ flex: "1 1 240px" }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>FORECAST CASH FLOW</div>
           {[{days:30,val:d.forecast_30},{days:60,val:d.forecast_60},{days:90,val:d.forecast_90}].map(fw => (
@@ -133,6 +329,7 @@ function Dashboard() {
           ))}
         </Card>
       </div>
+
       {d.action_items.length > 0 && (
         <Card>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>ACTION ITEMS</div>
@@ -149,24 +346,537 @@ function Dashboard() {
   );
 }
 
+// ─── Weekly Costs ───
+function WeeklyCosts({ contractId }) {
+  const [summary, setSummary] = useState(null);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!contractId) return;
+    const s = await api.getWeeklySummary(contractId);
+    setSummary(s);
+    if (!selectedWeek && s.weeks?.length > 0) {
+      setSelectedWeek(s.weeks[s.weeks.length - 1].week_number);
+    }
+  }, [contractId, selectedWeek]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const selectedWeekData = summary?.weeks?.find(w => w.week_number === selectedWeek);
+
+  const openNew = () => {
+    const ws = selectedWeekData;
+    setForm({
+      contract_id: contractId,
+      week_number: selectedWeek || 1,
+      week_start: ws?.week_start || today(),
+      week_end: ws?.week_end || today(),
+      person_name: "Ben",
+      major_task: "",
+      task_code: "A",
+      subtask_description: "",
+      entry_type: "hourly_labor",
+      hourly_rate: "125",
+      hours: "",
+      flat_amount: "",
+    });
+    setModal("new");
+  };
+
+  const openEdit = (entry) => {
+    setForm({ ...entry });
+    setModal("edit");
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const isHourly = form.entry_type === "hourly_labor";
+      const f = {
+        ...form,
+        week_number: Number(form.week_number),
+        hourly_rate: isHourly ? (Number(form.hourly_rate) || null) : null,
+        hours: isHourly ? (Number(form.hours) || null) : null,
+        flat_amount: !isHourly ? (Number(form.flat_amount) || null) : null,
+      };
+      if (modal === "new") await api.createWeeklyEntry(f);
+      else await api.updateWeeklyEntry(f.id, f);
+      setModal(null);
+      await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    await api.deleteWeeklyEntry(form.id);
+    setModal(null);
+    setSelectedWeek(null);
+    await load();
+  };
+
+  const isHourly = form.entry_type === "hourly_labor";
+
+  const columns = [
+    { label: "Person", render: r => <span style={{ fontWeight: 600 }}>{r.person_name}</span> },
+    { label: "Task", render: r => <span style={{ color: C.accent }}>{r.task_code}</span> },
+    { label: "Major Task", render: r => r.major_task || "—" },
+    { label: "Subtask", render: r => <span style={{ color: C.textMuted, fontSize: 12 }}>{r.subtask_description || "—"}</span> },
+    { label: "Type", render: r => <Badge status={r.entry_type} /> },
+    { label: "Hours", align: "right", mono: true, render: r => r.hours != null ? Number(r.hours).toFixed(2) : "—" },
+    { label: "Rate", align: "right", mono: true, render: r => r.hourly_rate != null ? fmt(r.hourly_rate) : "—" },
+    { label: "Cost", align: "right", mono: true, render: r => <span style={{ fontWeight: 600, color: C.amber }}>{fmt(r.line_cost)}</span> },
+  ];
+
+  if (!summary) return <div style={{ color: C.textDim, padding: 40, textAlign: "center" }}>Loading...</div>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Contract totals */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <StatCard label="Total Ops Cost" value={fmtShort(summary.total_ops)} icon="💼" color={C.amber} />
+        <StatCard label="Owner Draw" value={fmtShort(summary.owner_draw)} sub="Contract Value − Ops" icon="👤" color={C.green} />
+        <StatCard label="Contract Value" value={fmtShort(summary.contract_value)} icon="📋" color={C.accent} />
+        <StatCard label="Total Weeks" value={summary.weeks?.length || 0} sub="with entries" icon="📅" />
+      </div>
+
+      {/* Week picker + weekly summary table */}
+      <Card style={{ overflowX: "auto" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>WEEKLY SUMMARY — all margins reflect entries to date</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: MONO }}>
+          <thead><tr>
+            {["Week", "Dates", "Ops Cost", "Margin", "Billable", "Hours @$145"].map(h => (
+              <th key={h} style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}`, color: C.textMuted, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {(summary.weeks || []).map(w => (
+              <tr
+                key={w.week_number}
+                onClick={() => setSelectedWeek(w.week_number)}
+                style={{ cursor: "pointer", background: selectedWeek === w.week_number ? C.accentSoft : "transparent" }}
+                onMouseEnter={e => { if (selectedWeek !== w.week_number) e.currentTarget.style.background = C.surface2; }}
+                onMouseLeave={e => { e.currentTarget.style.background = selectedWeek === w.week_number ? C.accentSoft : "transparent"; }}
+              >
+                <td style={{ padding: "7px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}20`, fontFamily: FONT, fontWeight: 600, color: selectedWeek === w.week_number ? C.accent : C.text }}>Week {w.week_number}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, color: C.textMuted }}>{w.week_start} – {w.week_end}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20` }}>{fmt(w.ops_cost)}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, color: C.green }}>{fmt(w.allocated_margin)}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, fontWeight: 700, color: C.accent }}>{fmt(w.billable)}</td>
+                <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, color: C.textMuted }}>{(w.billable / 145).toFixed(2)}</td>
+              </tr>
+            ))}
+            {!summary.weeks?.length && (
+              <tr><td colSpan={6} style={{ padding: 20, textAlign: "center", color: C.textDim }}>No entries yet — add your first week below</td></tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      {/* Selected week entries */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>
+            {selectedWeekData
+              ? `Week ${selectedWeekData.week_number} — ${selectedWeekData.week_start} to ${selectedWeekData.week_end}`
+              : "Select a week above, or add a new entry"}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedWeekData && (
+              <div style={{ fontSize: 13, color: C.textMuted, alignSelf: "center" }}>
+                {selectedWeekData.entries.length} entries · {fmt(selectedWeekData.ops_cost)} ops · {fmt(selectedWeekData.billable)} billable
+              </div>
+            )}
+            <Btn onClick={openNew}>+ Add Entry</Btn>
+          </div>
+        </div>
+        {selectedWeekData && (
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <Table columns={columns} data={selectedWeekData.entries} onRowClick={openEdit} />
+          </Card>
+        )}
+      </div>
+
+      {/* Add/Edit modal */}
+      {modal && (
+        <Modal title={modal === "new" ? "Add Weekly Entry" : "Edit Entry"} onClose={() => setModal(null)} width={580}>
+          <FormRow>
+            <Select label="Person" value={form.person_name || "Ben"} onChange={e => setForm({ ...form, person_name: e.target.value })} options={PERSON_NAMES} />
+            <Select label="Task Code" value={form.task_code || "A"} onChange={e => setForm({ ...form, task_code: e.target.value })} options={TASK_CODES} />
+          </FormRow>
+          <FormRow>
+            <Input label="Major Task" value={form.major_task || ""} onChange={e => setForm({ ...form, major_task: e.target.value })} placeholder="e.g. Network Mtg #1 (May)" />
+            <Select label="Entry Type" value={form.entry_type || "hourly_labor"} onChange={e => setForm({ ...form, entry_type: e.target.value })} options={ENTRY_TYPES} />
+          </FormRow>
+          <FormRow>
+            <Input label="Subtask Description" value={form.subtask_description || ""} onChange={e => setForm({ ...form, subtask_description: e.target.value })} placeholder="e.g. Pre-meeting planning" />
+          </FormRow>
+          {isHourly ? (
+            <FormRow>
+              <Input label="Hours" type="number" step="0.25" value={form.hours || ""} onChange={e => setForm({ ...form, hours: e.target.value })} placeholder="0.00" />
+              <Input label="Hourly Rate ($)" type="number" value={form.hourly_rate || ""} onChange={e => setForm({ ...form, hourly_rate: e.target.value })} placeholder="125" />
+            </FormRow>
+          ) : (
+            <FormRow>
+              <Input label="Flat Amount ($)" type="number" value={form.flat_amount || ""} onChange={e => setForm({ ...form, flat_amount: e.target.value })} placeholder="0.00" />
+            </FormRow>
+          )}
+          <FormRow>
+            <Input label="Week Number" type="number" value={form.week_number || ""} onChange={e => setForm({ ...form, week_number: e.target.value })} />
+            <Input label="Week Start" type="date" value={form.week_start || ""} onChange={e => setForm({ ...form, week_start: e.target.value })} />
+            <Input label="Week End" type="date" value={form.week_end || ""} onChange={e => setForm({ ...form, week_end: e.target.value })} />
+          </FormRow>
+          {isHourly && form.hours && form.hourly_rate && (
+            <div style={{ background: C.greenSoft, border: `1px solid ${C.green}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontFamily: MONO, fontSize: 13 }}>
+              Line cost: {fmt(Number(form.hours) * Number(form.hourly_rate))}
+            </div>
+          )}
+          {!isHourly && form.flat_amount && (
+            <div style={{ background: C.amberSoft, border: `1px solid ${C.amber}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontFamily: MONO, fontSize: 13 }}>
+              Flat amount: {fmt(Number(form.flat_amount))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
+            {modal === "edit" && <Btn variant="danger" onClick={remove}>Delete</Btn>}
+            <Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save} disabled={saving || !form.week_number || !form.week_start}>
+              {saving ? "Saving..." : "Save"}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Task Allocations ───
+function TaskAllocations({ contractId }) {
+  const [allocations, setAllocations] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [filterMonth, setFilterMonth] = useState(currentMonth());
+  const [filterVendor, setFilterVendor] = useState("");
+  const [payout, setPayout] = useState(null);
+  const [payoutMonth, setPayoutMonth] = useState(currentMonth());
+
+  const load = useCallback(async () => {
+    const [a, v] = await Promise.all([
+      api.listTaskAllocations(contractId, filterVendor || null, filterMonth || null),
+      api.listVendors(),
+    ]);
+    setAllocations(a);
+    setVendors(v.filter(v => v.vendor_type === "subcontractor"));
+  }, [contractId, filterMonth, filterVendor]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => {
+    setForm({
+      contract_id: contractId,
+      vendor_id: vendors[0]?.id || "",
+      major_task_name: "",
+      total_task_payment: "",
+      month_year: currentMonth(),
+      month_amount: "",
+      percent_of_task: "",
+    });
+    setModal("new");
+  };
+  const openEdit = (r) => { setForm({ ...r }); setModal("edit"); };
+  const save = async () => {
+    const f = {
+      ...form,
+      total_task_payment: Number(form.total_task_payment) || 0,
+      month_amount: Number(form.month_amount) || 0,
+      percent_of_task: Number(form.percent_of_task) || 0,
+    };
+    if (modal === "new") await api.createTaskAllocation(f);
+    else await api.updateTaskAllocation(f.id, f);
+    setModal(null);
+    load();
+  };
+  const remove = async () => { await api.deleteTaskAllocation(form.id); setModal(null); load(); };
+
+  const runPayout = async () => {
+    const result = await api.getPayoutReport(contractId, payoutMonth);
+    setPayout(result);
+  };
+
+  const vName = (vid) => vendors.find(v => v.id === vid)?.display_name || vid;
+
+  const columns = [
+    { label: "Vendor", render: r => <span style={{ fontWeight: 600 }}>{vName(r.vendor_id)}</span> },
+    { label: "Major Task", render: r => r.major_task_name },
+    { label: "Month", render: r => monthLabel(r.month_year) },
+    { label: "Task Total", align: "right", mono: true, render: r => fmt(r.total_task_payment) },
+    { label: "% of Task", align: "right", mono: true, render: r => `${(Number(r.percent_of_task) * 100).toFixed(1)}%` },
+    { label: "Month Amount", align: "right", mono: true, render: r => <span style={{ fontWeight: 700, color: C.accent }}>{fmt(r.month_amount)}</span> },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Payout report */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>SUBCONTRACTOR PAYOUT REPORT</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <Input label="Month" type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)} style={{ maxWidth: 200 }} />
+          <Btn onClick={runPayout}>Generate Payout</Btn>
+        </div>
+        {payout && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>Payouts for {monthLabel(payout.month_year)}</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: MONO }}>
+              <thead><tr>
+                {["Vendor", "Task", "% of Task", "Amount Due"].map(h => (
+                  <th key={h} style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}`, color: C.textMuted, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {payout.lines.map((l, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}20`, fontFamily: FONT, fontWeight: 600 }}>{l.vendor_name}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}20`, fontFamily: FONT }}>{l.major_task_name}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20` }}>{(l.percent_of_task * 100).toFixed(1)}%</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20`, fontWeight: 700, color: C.accent }}>{fmt(l.month_amount)}</td>
+                  </tr>
+                ))}
+                {payout.lines.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: 20, textAlign: "center", color: C.textDim }}>No allocations for this month</td></tr>
+                )}
+              </tbody>
+              {Object.keys(payout.vendor_totals).length > 0 && (
+                <tfoot>
+                  {Object.entries(payout.vendor_totals).map(([name, total]) => (
+                    <tr key={name}>
+                      <td style={{ padding: "8px 10px", fontFamily: FONT, fontWeight: 700, color: C.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }} colSpan={3}>{name} Total</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: MONO, fontWeight: 700, color: C.green }}>{fmt(total)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: `2px solid ${C.border}` }}>
+                    <td style={{ padding: "10px 10px", fontFamily: FONT, fontWeight: 700, fontSize: 13 }} colSpan={3}>Grand Total</td>
+                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, fontWeight: 700, fontSize: 15, color: C.accent }}>{fmt(payout.grand_total)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Allocation list */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Input label="Filter Month" type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ maxWidth: 160 }} />
+            <Select label="Filter Vendor" value={filterVendor} onChange={e => setFilterVendor(e.target.value)} options={[{ value: "", label: "All Vendors" }, ...vendors.map(v => ({ value: v.id, label: v.display_name }))]} />
+          </div>
+          <Btn onClick={openNew} disabled={!vendors.length}>+ Add Allocation</Btn>
+        </div>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <Table columns={columns} data={allocations} onRowClick={openEdit} />
+        </Card>
+      </div>
+
+      {modal && (
+        <Modal title={modal === "new" ? "Add Task Allocation" : "Edit Allocation"} onClose={() => setModal(null)} width={560}>
+          <FormRow>
+            <Select label="Vendor" value={form.vendor_id || ""} onChange={e => setForm({ ...form, vendor_id: e.target.value })} options={vendors.map(v => ({ value: v.id, label: v.display_name }))} />
+            <Input label="Month" type="month" value={form.month_year || ""} onChange={e => setForm({ ...form, month_year: e.target.value })} />
+          </FormRow>
+          <FormRow>
+            <Input label="Major Task Name" value={form.major_task_name || ""} onChange={e => setForm({ ...form, major_task_name: e.target.value })} placeholder="e.g. Network Mtg #1 (May)" />
+          </FormRow>
+          <FormRow>
+            <Input label="Total Task Payment ($)" type="number" value={form.total_task_payment || ""} onChange={e => setForm({ ...form, total_task_payment: e.target.value })} />
+            <Input label="Month Amount ($)" type="number" value={form.month_amount || ""} onChange={e => setForm({ ...form, month_amount: e.target.value })} />
+          </FormRow>
+          <FormRow>
+            <Input label="% of Task (0–1)" type="number" step="0.0001" value={form.percent_of_task || ""} onChange={e => setForm({ ...form, percent_of_task: e.target.value })} placeholder="e.g. 0.25 for 25%" />
+          </FormRow>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
+            {modal === "edit" && <Btn variant="danger" onClick={remove}>Delete</Btn>}
+            <Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save} disabled={!form.vendor_id || !form.major_task_name}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Owner Profit ───
+function OwnerProfit({ contractId }) {
+  const [records, setRecords] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [computing, setComputing] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!contractId) return;
+    setRecords(await api.listOwnerProfit(contractId));
+  }, [contractId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => {
+    setForm({
+      contract_id: contractId,
+      month_year: currentMonth(),
+      gross_income: "",
+      subcontractor_costs: "",
+      direct_expenses: "",
+      indirect_expenses: "0",
+      tax_rate: "0.40",
+    });
+    setModal("new");
+  };
+  const openEdit = (r) => { setForm({ ...r, tax_rate: Number(r.tax_rate).toFixed(2) }); setModal("edit"); };
+
+  const autoCompute = async () => {
+    if (!form.month_year) return;
+    setComputing(true);
+    try {
+      const result = await api.autoComputeProfit(contractId, form.month_year);
+      setForm(f => ({
+        ...f,
+        gross_income: result.gross_income,
+        subcontractor_costs: result.subcontractor_costs,
+        direct_expenses: result.direct_expenses,
+        indirect_expenses: result.indirect_expenses,
+        tax_rate: result.tax_rate,
+      }));
+    } finally {
+      setComputing(false);
+    }
+  };
+
+  const save = async () => {
+    const f = {
+      ...form,
+      gross_income: Number(form.gross_income) || 0,
+      subcontractor_costs: Number(form.subcontractor_costs) || 0,
+      direct_expenses: Number(form.direct_expenses) || 0,
+      indirect_expenses: Number(form.indirect_expenses) || 0,
+      tax_rate: Number(form.tax_rate) || 0.40,
+    };
+    if (modal === "new") await api.createOwnerProfit(f);
+    else await api.updateOwnerProfit(f.id, f);
+    setModal(null);
+    load();
+  };
+  const remove = async () => { await api.deleteOwnerProfit(form.id); setModal(null); load(); };
+
+  // Local preview calculation
+  const gi = Number(form.gross_income) || 0;
+  const sc = Number(form.subcontractor_costs) || 0;
+  const de = Number(form.direct_expenses) || 0;
+  const ie = Number(form.indirect_expenses) || 0;
+  const tr = Number(form.tax_rate) || 0.40;
+  const op = gi - sc - de - ie;
+  const ts = op * tr;
+  const np = op - ts;
+
+  const columns = [
+    { label: "Month", render: r => <span style={{ fontWeight: 600 }}>{monthLabel(r.month_year)}</span> },
+    { label: "Gross Income", align: "right", mono: true, render: r => <span style={{ color: C.green }}>{fmt(r.gross_income)}</span> },
+    { label: "Sub Costs", align: "right", mono: true, render: r => fmt(r.subcontractor_costs) },
+    { label: "Direct Exp", align: "right", mono: true, render: r => fmt(r.direct_expenses) },
+    { label: "Indirect Exp", align: "right", mono: true, render: r => fmt(r.indirect_expenses) },
+    { label: "Owner Profit", align: "right", mono: true, render: r => <span style={{ fontWeight: 700, color: Number(r.owner_profit) >= 0 ? C.green : C.red }}>{fmt(r.owner_profit)}</span> },
+    { label: "Tax Set-Aside (40%)", align: "right", mono: true, render: r => <span style={{ color: C.amber }}>{fmt(r.tax_set_aside)}</span> },
+    { label: "Net Profit", align: "right", mono: true, render: r => <span style={{ fontWeight: 700, color: Number(r.net_profit) >= 0 ? C.accent : C.red }}>{fmt(r.net_profit)}</span> },
+  ];
+
+  const totals = records.reduce((acc, r) => ({
+    gi: acc.gi + Number(r.gross_income),
+    sc: acc.sc + Number(r.subcontractor_costs),
+    de: acc.de + Number(r.direct_expenses),
+    ie: acc.ie + Number(r.indirect_expenses),
+    op: acc.op + Number(r.owner_profit),
+    ts: acc.ts + Number(r.tax_set_aside),
+    np: acc.np + Number(r.net_profit),
+  }), { gi: 0, sc: 0, de: 0, ie: 0, op: 0, ts: 0, np: 0 });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Summary totals */}
+      {records.length > 0 && (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          <StatCard label="Total Income" value={fmtShort(totals.gi)} icon="📥" color={C.green} />
+          <StatCard label="Total Expenses" value={fmtShort(totals.sc + totals.de + totals.ie)} icon="📤" color={C.amber} />
+          <StatCard label="Owner Profit" value={fmtShort(totals.op)} icon="👤" color={totals.op >= 0 ? C.green : C.red} />
+          <StatCard label="Tax Set-Aside" value={fmtShort(totals.ts)} sub="40% of profit" icon="🏛" color={C.amber} />
+          <StatCard label="Net After Tax" value={fmtShort(totals.np)} icon="💰" color={totals.np >= 0 ? C.accent : C.red} />
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ fontSize: 13, color: C.textMuted }}>{records.length} month(s) tracked</div>
+        <Btn onClick={openNew}>+ Add Month</Btn>
+      </div>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <Table columns={columns} data={records} onRowClick={openEdit} />
+      </Card>
+
+      {modal && (
+        <Modal title={modal === "new" ? "Add Profit Record" : "Edit Profit Record"} onClose={() => setModal(null)} width={540}>
+          <FormRow>
+            <Input label="Month" type="month" value={form.month_year || ""} onChange={e => setForm({ ...form, month_year: e.target.value })} />
+            <Btn variant="secondary" onClick={autoCompute} disabled={computing || !form.month_year} style={{ alignSelf: "flex-end" }}>
+              {computing ? "Computing..." : "⚡ Auto-Compute"}
+            </Btn>
+          </FormRow>
+          <div style={{ background: C.surface2, borderRadius: 8, padding: "8px 14px", marginBottom: 14, fontSize: 12, color: C.textMuted }}>
+            Auto-Compute pulls gross income from client invoices and costs from weekly entries for the selected month.
+          </div>
+          <FormRow>
+            <Input label="Gross Income ($)" type="number" value={form.gross_income || ""} onChange={e => setForm({ ...form, gross_income: e.target.value })} />
+          </FormRow>
+          <FormRow>
+            <Input label="Subcontractor Costs ($)" type="number" value={form.subcontractor_costs || ""} onChange={e => setForm({ ...form, subcontractor_costs: e.target.value })} />
+            <Input label="Direct Expenses ($)" type="number" value={form.direct_expenses || ""} onChange={e => setForm({ ...form, direct_expenses: e.target.value })} />
+          </FormRow>
+          <FormRow>
+            <Input label="Indirect Expenses ($)" type="number" value={form.indirect_expenses || ""} onChange={e => setForm({ ...form, indirect_expenses: e.target.value })} />
+            <Input label="Tax Rate (e.g. 0.40)" type="number" step="0.01" value={form.tax_rate || ""} onChange={e => setForm({ ...form, tax_rate: e.target.value })} />
+          </FormRow>
+          {/* Live preview */}
+          <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.8 }}>Preview</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 0", fontFamily: MONO, fontSize: 13 }}>
+              <span style={{ color: C.textMuted }}>Owner Profit</span>
+              <span style={{ textAlign: "right", color: op >= 0 ? C.green : C.red, fontWeight: 700 }}>{fmt(op)}</span>
+              <span style={{ color: C.textMuted }}>Tax Set-Aside ({(tr * 100).toFixed(0)}%)</span>
+              <span style={{ textAlign: "right", color: C.amber }}>{fmt(ts)}</span>
+              <span style={{ color: C.textMuted, fontWeight: 600 }}>Net After Tax</span>
+              <span style={{ textAlign: "right", color: np >= 0 ? C.accent : C.red, fontWeight: 700 }}>{fmt(np)}</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
+            {modal === "edit" && <Btn variant="danger" onClick={remove}>Delete</Btn>}
+            <Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save} disabled={!form.month_year}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ─── Vendors ───
 function Vendors() {
   const [vendors, setVendors] = useState([]);
   const [bills, setBills] = useState([]);
-  const [payments, setPayments] = useState([]);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
 
   const load = useCallback(async () => {
     const [v, b] = await Promise.all([api.listVendors(), api.listVendorBills()]);
     setVendors(v); setBills(b);
-    // load all vendor payments for balance calc
-    const allPays = [];
-    for (const bill of b) {
-      if (bill.status !== "paid") continue; // optimization: skip loading pays for paid bills individually
-    }
-    // Simpler: compute from bill statuses. For precise balance we track payments too.
-    setPayments([]); // We'll compute balance from bills for now
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -220,6 +930,8 @@ function ClientInvoices({ contractId }) {
   const [form, setForm] = useState({});
   const [payForm, setPayForm] = useState({});
   const [payModal, setPayModal] = useState(null);
+  const [invoiceGen, setInvoiceGen] = useState(null);
+  const [genMonth, setGenMonth] = useState(currentMonth());
 
   const load = useCallback(async () => { setInvoices(await api.listClientInvoices(contractId)); }, [contractId]);
   useEffect(() => { load(); }, [load]);
@@ -240,6 +952,30 @@ function ClientInvoices({ contractId }) {
     setPayModal(null); load();
   };
 
+  const runGenerate = async () => {
+    const result = await api.generateInvoice(contractId, genMonth);
+    setInvoiceGen(result);
+  };
+
+  const useGeneratedAmount = () => {
+    if (!invoiceGen) return;
+    const mn = invoiceGen.month_year;
+    const [yr, mo] = mn.split("-");
+    const lastDay = new Date(yr, mo, 0).getDate();
+    setForm({
+      contract_id: contractId,
+      invoice_number: "",
+      invoice_date: today(),
+      due_date: "",
+      billing_period_start: `${mn}-01`,
+      billing_period_end: `${mn}-${lastDay}`,
+      amount: invoiceGen.total_amount.toFixed(2),
+      status: "draft",
+      notes: `Auto-generated from weekly entries. ${invoiceGen.total_hours.toFixed(2)} hrs @ $145/hr.`,
+    });
+    setModal("new");
+  };
+
   const columns = [
     { label: "Invoice #", render: r => <span style={{ fontWeight: 600 }}>{r.invoice_number || "—"}</span> },
     { label: "Date", key: "invoice_date" },
@@ -249,12 +985,61 @@ function ClientInvoices({ contractId }) {
   ];
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: C.textMuted }}>{invoices.length} invoice(s) — {fmt(sum(invoices, "amount"))} total billed</div>
-        <Btn onClick={openNew}>+ New Invoice</Btn>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Invoice Generator */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.textMuted }}>INVOICE GENERATOR — from Weekly Cost Entries</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <Input label="Billing Month" type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)} style={{ maxWidth: 200 }} />
+          <Btn onClick={runGenerate}>Calculate Invoice</Btn>
+        </div>
+        {invoiceGen && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, color: C.textMuted }}>
+                {invoiceGen.client_name} — {monthLabel(invoiceGen.month_year)} — {invoiceGen.total_hours.toFixed(2)} hrs @ ${invoiceGen.billing_rate}/hr
+              </div>
+              <Btn variant="secondary" onClick={useGeneratedAmount} style={{ fontSize: 12, padding: "5px 12px" }}>
+                → Create Invoice Draft
+              </Btn>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: MONO }}>
+              <thead><tr>
+                {["Task Code", "Billable Amount", "Hours @ $145"].map(h => (
+                  <th key={h} style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}`, color: C.textMuted, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {invoiceGen.lines.map(l => (
+                  <tr key={l.task_code}>
+                    <td style={{ padding: "7px 10px", textAlign: "left", borderBottom: `1px solid ${C.border}20`, fontFamily: FONT, fontWeight: 600, color: C.accent }}>{l.task_code}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20` }}>{fmt(l.billable_amount)}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", borderBottom: `1px solid ${C.border}20` }}>{l.hours_equivalent.toFixed(2)} hrs</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop: `2px solid ${C.border}` }}>
+                  <td style={{ padding: "10px 10px", fontFamily: FONT, fontWeight: 700 }}>Total</td>
+                  <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, fontWeight: 700, color: C.accent }}>{fmt(invoiceGen.total_amount)}</td>
+                  <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, fontWeight: 700 }}>{invoiceGen.total_hours.toFixed(2)} hrs</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ marginTop: 10, fontSize: 11, color: C.textDim, fontFamily: MONO }}>
+              Ops cost: {fmt(invoiceGen.ops_cost)} · Owner margin: {fmt(invoiceGen.owner_margin)}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Invoice list */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: C.textMuted }}>{invoices.length} invoice(s) — {fmt(sum(invoices, "amount"))} total billed</div>
+          <Btn onClick={openNew}>+ New Invoice</Btn>
+        </div>
+        <Card style={{ padding: 0, overflow: "hidden" }}><Table columns={columns} data={invoices} onRowClick={openEdit} /></Card>
       </div>
-      <Card style={{ padding: 0, overflow: "hidden" }}><Table columns={columns} data={invoices} onRowClick={openEdit} /></Card>
+
       {modal && (
         <Modal title={modal === "new" ? "New Client Invoice" : "Edit Invoice"} onClose={() => setModal(null)}>
           <FormRow><Input label="Invoice Number" value={form.invoice_number||""} onChange={e => setForm({...form, invoice_number: e.target.value})} /><Input label="Amount" type="number" value={form.amount||""} onChange={e => setForm({...form, amount: e.target.value})} /></FormRow>
@@ -625,14 +1410,17 @@ function ContractSettings({ contractId, onUpdate }) {
 
 // ─── MAIN APP ───
 const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: "◉" },
-  { id: "invoices", label: "Client Invoices", icon: "◈" },
-  { id: "vendors", label: "Vendors", icon: "◇" },
-  { id: "bills", label: "Vendor Bills", icon: "◆" },
-  { id: "costs", label: "Direct Costs", icon: "○" },
-  { id: "forecast", label: "Forecast", icon: "◎" },
-  { id: "reports", label: "Reports", icon: "▤" },
-  { id: "settings", label: "Settings", icon: "⚙" },
+  { id: "dashboard",    label: "Dashboard",         icon: "◉" },
+  { id: "weekly",       label: "Weekly Costs",       icon: "◫" },
+  { id: "invoices",     label: "Client Invoices",    icon: "◈" },
+  { id: "allocations",  label: "Task Allocations",   icon: "◪" },
+  { id: "profit",       label: "Owner Profit",       icon: "◬" },
+  { id: "vendors",      label: "Vendors",            icon: "◇" },
+  { id: "bills",        label: "Vendor Bills",       icon: "◆" },
+  { id: "costs",        label: "Direct Costs",       icon: "○" },
+  { id: "forecast",     label: "Forecast",           icon: "◎" },
+  { id: "reports",      label: "Reports",            icon: "▤" },
+  { id: "settings",     label: "Settings",           icon: "⚙" },
 ];
 
 export default function App() {
@@ -678,15 +1466,18 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dashboard": return <Dashboard />;
-      case "invoices": return <ClientInvoices contractId={contractId} />;
-      case "vendors": return <Vendors />;
-      case "bills": return <VendorBills contractId={contractId} />;
-      case "costs": return <DirectCosts contractId={contractId} />;
-      case "forecast": return <Forecast contractId={contractId} />;
-      case "reports": return <Reports />;
-      case "settings": return <ContractSettings contractId={contractId} onUpdate={loadContract} />;
-      default: return <Dashboard />;
+      case "dashboard":   return <Dashboard contractId={contractId} />;
+      case "weekly":      return <WeeklyCosts contractId={contractId} />;
+      case "invoices":    return <ClientInvoices contractId={contractId} />;
+      case "allocations": return <TaskAllocations contractId={contractId} />;
+      case "profit":      return <OwnerProfit contractId={contractId} />;
+      case "vendors":     return <Vendors />;
+      case "bills":       return <VendorBills contractId={contractId} />;
+      case "costs":       return <DirectCosts contractId={contractId} />;
+      case "forecast":    return <Forecast contractId={contractId} />;
+      case "reports":     return <Reports />;
+      case "settings":    return <ContractSettings contractId={contractId} onUpdate={loadContract} />;
+      default:            return <Dashboard contractId={contractId} />;
     }
   };
 

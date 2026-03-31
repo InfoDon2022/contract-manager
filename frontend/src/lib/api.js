@@ -75,6 +75,8 @@ const api = {
 
   // Dashboard
   getDashboard: () => request("/api/dashboard"),
+  getDashboardMonthlyChart: (contractId) =>
+    request(`/api/dashboard/monthly-chart${contractId ? `?contract_id=${contractId}` : ""}`),
 
   // Reports
   reportPL: () => request("/api/reports/pl"),
@@ -82,6 +84,57 @@ const api = {
   reportVendorSummary: () => request("/api/reports/vendor-summary"),
   reportBilledVsCollected: () => request("/api/reports/billed-vs-collected"),
   reportForecastVsActual: () => request("/api/reports/forecast-vs-actual"),
+  generateInvoice: (contractId, monthYear) =>
+    request(`/api/reports/generate-invoice?contract_id=${contractId}&month_year=${monthYear}`),
+
+  // Weekly Entries
+  listWeeklyEntries: (contractId, weekNumber) => {
+    const params = new URLSearchParams();
+    if (contractId) params.set("contract_id", contractId);
+    if (weekNumber != null) params.set("week_number", weekNumber);
+    const qs = params.toString();
+    return request(`/api/weekly-entries${qs ? `?${qs}` : ""}`);
+  },
+  getWeeklySummary: (contractId) =>
+    request(`/api/weekly-entries/summary?contract_id=${contractId}`),
+  getMonthlyBilling: (contractId) =>
+    request(`/api/weekly-entries/monthly-billing?contract_id=${contractId}`),
+  createWeeklyEntry: (data) =>
+    request("/api/weekly-entries", { method: "POST", body: JSON.stringify(data) }),
+  updateWeeklyEntry: (id, data) =>
+    request(`/api/weekly-entries/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteWeeklyEntry: (id) =>
+    request(`/api/weekly-entries/${id}`, { method: "DELETE" }),
+
+  // Task Allocations
+  listTaskAllocations: (contractId, vendorId, monthYear) => {
+    const params = new URLSearchParams();
+    if (contractId) params.set("contract_id", contractId);
+    if (vendorId) params.set("vendor_id", vendorId);
+    if (monthYear) params.set("month_year", monthYear);
+    const qs = params.toString();
+    return request(`/api/task-allocations${qs ? `?${qs}` : ""}`);
+  },
+  createTaskAllocation: (data) =>
+    request("/api/task-allocations", { method: "POST", body: JSON.stringify(data) }),
+  updateTaskAllocation: (id, data) =>
+    request(`/api/task-allocations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteTaskAllocation: (id) =>
+    request(`/api/task-allocations/${id}`, { method: "DELETE" }),
+  getPayoutReport: (contractId, monthYear) =>
+    request(`/api/task-allocations/payout-report?contract_id=${contractId}&month_year=${monthYear}`),
+
+  // Owner Profit
+  listOwnerProfit: (contractId) =>
+    request(`/api/owner-profit${contractId ? `?contract_id=${contractId}` : ""}`),
+  autoComputeProfit: (contractId, monthYear) =>
+    request(`/api/owner-profit/auto-compute?contract_id=${contractId}&month_year=${monthYear}`),
+  createOwnerProfit: (data) =>
+    request("/api/owner-profit", { method: "POST", body: JSON.stringify(data) }),
+  updateOwnerProfit: (id, data) =>
+    request(`/api/owner-profit/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteOwnerProfit: (id) =>
+    request(`/api/owner-profit/${id}`, { method: "DELETE" }),
 };
 
 export default api;
