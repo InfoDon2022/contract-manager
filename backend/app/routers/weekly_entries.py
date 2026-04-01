@@ -1,9 +1,10 @@
 from collections import defaultdict
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import Contract, WeeklyEntry
+from app.models.models import ClientInvoice, Contract, WeeklyEntry
 from app.schemas import WeeklyEntryCreate, WeeklyEntryUpdate, WeeklyEntryOut
 
 router = APIRouter(prefix="/api/weekly-entries", tags=["weekly-entries"])
@@ -125,10 +126,21 @@ def weekly_summary(contract_id: str, db: Session = Depends(get_db)):
     """
     weeks, total_ops, owner_draw = _compute_summary(contract_id, db)
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
+
+    # Total actually invoiced to the client to date (for earned-margin display)
+    total_billed = float(
+        db.query(func.coalesce(func.sum(ClientInvoice.amount), 0))
+        .filter(ClientInvoice.contract_id == contract_id)
+        .scalar()
+    )
+    actual_margin = round(total_billed - float(total_ops), 2)
+
     return {
         "contract_value": float(contract.total_value),
         "total_ops": float(round(total_ops, 2)),
-        "owner_draw": float(round(owner_draw, 2)),
+        "owner_draw": float(round(owner_draw, 2)),   # kept for billing engine reference
+        "total_billed": total_billed,
+        "actual_margin": actual_margin,              # billed − ops = what owner keeps
         "weeks": weeks,
     }
 
