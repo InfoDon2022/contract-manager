@@ -269,7 +269,6 @@ function Dashboard({ contractId }) {
 
   const plData = (d.monthly_pl || []).map(r => ({ label: monthLabel(r.month), value: r.net }));
   const margin = d.margin_pct;
-  const totalWeeklyBillable = chartData.reduce((s, m) => s + m.income, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -282,10 +281,10 @@ function Dashboard({ contractId }) {
         <StatCard label="Projected Margin" value={`${margin.toFixed(1)}%`} icon="📈" color={margin >= 20 ? C.green : margin >= 0 ? C.amber : C.red} />
       </div>
 
-      {/* Contract burn bar */}
+      {/* Contract burn bar — uses actual invoiced amount, not projected weekly billable */}
       {d.contract_value > 0 && (
         <Card>
-          <BurnBar totalValue={Number(d.contract_value)} totalBillable={totalWeeklyBillable || Number(d.total_billed)} />
+          <BurnBar totalValue={Number(d.contract_value)} totalBillable={Number(d.total_billed)} />
         </Card>
       )}
 
@@ -438,8 +437,14 @@ function WeeklyCosts({ contractId }) {
       {/* Contract totals */}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         <StatCard label="Total Ops Cost" value={fmtShort(summary.total_ops)} icon="💼" color={C.amber} />
-        <StatCard label="Owner Draw" value={fmtShort(summary.owner_draw)} sub="Contract Value − Ops" icon="👤" color={C.green} />
-        <StatCard label="Contract Value" value={fmtShort(summary.contract_value)} icon="📋" color={C.accent} />
+        <StatCard label="Billed to Date" value={fmtShort(summary.total_billed)} sub="from client invoices" icon="📄" color={C.accent} />
+        <StatCard
+          label="Earned Margin"
+          value={fmtShort(summary.actual_margin)}
+          sub="Billed − Ops"
+          icon="👤"
+          color={(summary.actual_margin ?? 0) >= 0 ? C.green : C.red}
+        />
         <StatCard label="Total Weeks" value={summary.weeks?.length || 0} sub="with entries" icon="📅" />
       </div>
 
@@ -562,6 +567,7 @@ function TaskAllocations({ contractId }) {
   const [filterVendor, setFilterVendor] = useState("");
   const [payout, setPayout] = useState(null);
   const [payoutMonth, setPayoutMonth] = useState(currentMonth());
+  const [payoutError, setPayoutError] = useState(null);
 
   const load = useCallback(async () => {
     const [a, v] = await Promise.all([
@@ -602,8 +608,13 @@ function TaskAllocations({ contractId }) {
   const remove = async () => { await api.deleteTaskAllocation(form.id); setModal(null); load(); };
 
   const runPayout = async () => {
-    const result = await api.getPayoutReport(contractId, payoutMonth);
-    setPayout(result);
+    setPayoutError(null);
+    try {
+      const result = await api.getPayoutReport(contractId, payoutMonth);
+      setPayout(result);
+    } catch (err) {
+      setPayoutError(err.message || "Failed to generate payout report.");
+    }
   };
 
   const vName = (vid) => vendors.find(v => v.id === vid)?.display_name || vid;
@@ -626,6 +637,11 @@ function TaskAllocations({ contractId }) {
           <Input label="Month" type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)} style={{ maxWidth: 200 }} />
           <Btn onClick={runPayout}>Generate Payout</Btn>
         </div>
+        {payoutError && (
+          <div style={{ marginTop: 12, padding: "10px 14px", background: C.redSoft, border: `1px solid ${C.red}30`, borderRadius: 8, fontSize: 13, color: C.red }}>
+            ⚠ {payoutError}
+          </div>
+        )}
         {payout && (
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>Payouts for {monthLabel(payout.month_year)}</div>
@@ -932,6 +948,7 @@ function ClientInvoices({ contractId }) {
   const [payModal, setPayModal] = useState(null);
   const [invoiceGen, setInvoiceGen] = useState(null);
   const [genMonth, setGenMonth] = useState(currentMonth());
+  const [genError, setGenError] = useState(null);
 
   const load = useCallback(async () => { setInvoices(await api.listClientInvoices(contractId)); }, [contractId]);
   useEffect(() => { load(); }, [load]);
@@ -953,8 +970,14 @@ function ClientInvoices({ contractId }) {
   };
 
   const runGenerate = async () => {
-    const result = await api.generateInvoice(contractId, genMonth);
-    setInvoiceGen(result);
+    setGenError(null);
+    setInvoiceGen(null);
+    try {
+      const result = await api.generateInvoice(contractId, genMonth);
+      setInvoiceGen(result);
+    } catch (err) {
+      setGenError(err.message || "Failed to calculate invoice. Make sure weekly cost entries exist for the selected month.");
+    }
   };
 
   const useGeneratedAmount = () => {
@@ -993,6 +1016,11 @@ function ClientInvoices({ contractId }) {
           <Input label="Billing Month" type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)} style={{ maxWidth: 200 }} />
           <Btn onClick={runGenerate}>Calculate Invoice</Btn>
         </div>
+        {genError && (
+          <div style={{ marginTop: 12, padding: "10px 14px", background: C.redSoft, border: `1px solid ${C.red}30`, borderRadius: 8, fontSize: 13, color: C.red }}>
+            ⚠ {genError}
+          </div>
+        )}
         {invoiceGen && (
           <div style={{ marginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>

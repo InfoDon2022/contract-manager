@@ -103,12 +103,19 @@ def auto_compute(contract_id: str, month_year: str, db: Session = Depends(get_db
       plus DirectCost table entries (status != planned) in month_year
     - indirect_expenses: 0 (fill manually — could later pull from MonthlyForecast overhead)
     """
-    # Gross income from client invoices
+    # Gross income — GAAP accrual basis: recognize revenue in the period the services
+    # were PERFORMED (billing_period_end), not when the invoice was issued or paid.
+    # Falls back to billing_period_start, then invoice_date for older records without
+    # a billing period set.
     gross_income = (
         db.query(func.coalesce(func.sum(ClientInvoice.amount), 0))
         .filter(
             ClientInvoice.contract_id == contract_id,
-            func.to_char(ClientInvoice.invoice_date, "YYYY-MM") == month_year,
+            func.coalesce(
+                func.to_char(ClientInvoice.billing_period_end, "YYYY-MM"),
+                func.to_char(ClientInvoice.billing_period_start, "YYYY-MM"),
+                func.to_char(ClientInvoice.invoice_date, "YYYY-MM"),
+            ) == month_year,
         )
         .scalar()
     )
